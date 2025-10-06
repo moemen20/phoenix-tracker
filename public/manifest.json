@@ -1,0 +1,10 @@
+{
+  "name": "Phoenix Tracker",
+  "short_name": "Phoenix Tracker",
+  "description": "Collaborative CRM for Network Marketing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FF6B00",
+  "orientation": "portrait-primary"
+}

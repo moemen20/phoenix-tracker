@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is upline of a team
+    function isUplineOf(teamId) {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'upline' &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == teamId;
+    }
+
+    // Helper function to check if user has access to team data
+    function canAccessTeam(teamId) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == teamId ||
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'upline' &&
+              exists(/databases/$(database)/documents/users/{userId}) &&
+              get(/databases/$(database)/documents/users/{userId}).data.uplineTeamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId &&
+              get(/databases/$(database)/documents/users/{userId}).data.teamId == teamId);
+    }
+
+    // Users collection - users can only read/write their own data, uplines can read their downlines
+    match /users/{userId} {
+      allow read: if request.auth != null &&
+                     (request.auth.uid == userId ||
+                      (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(userId)).data.uplineTeamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId));
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Prospects, tasks, contacts collections - users can access their team data, uplines can access their downlines' data
+    match /{collectionName=**}/{documentId} {
+      allow read, write: if request.auth != null &&
+                           canAccessTeam(resource.data.teamId);
+    }
+  }
+}

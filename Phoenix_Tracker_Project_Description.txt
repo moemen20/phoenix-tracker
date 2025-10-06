@@ -1,0 +1,143 @@
+
+Titre du projet :
+CRM Collaboratif pour Network Marketing – Phoenix Tracker
+
+Description générale du projet :
+Je veux créer une application web progressive (PWA) moderne et responsive destinée aux équipes de network marketing de la société Phoenix for Marketing. 
+L’objectif est de remplacer notre fichier Excel partagé par une solution intuitive et automatisée pour la gestion des prospects, le suivi des tâches quotidiennes et la collaboration entre uplines et downlines.
+L’application doit être simple, rapide, installable sur smartphone comme une app mobile, et multi-utilisateurs.
+
+Objectifs principaux :
+1. Centraliser les données des prospects (noms, contacts, statut, historique, relances).
+2. Gérer les tâches et relances quotidiennes.
+3. Permettre le travail collaboratif en temps réel entre plusieurs membres (partage sécurisé).
+4. Afficher des tableaux de bord et statistiques de performance.
+5. Offrir une interface claire, fluide et agréable à utiliser sur mobile comme sur ordinateur.
+
+Fonctionnalités du MVP :
+1. Authentification et rôles :
+   - Connexion et inscription via e-mail/mot de passe (Firebase Auth).
+   - Gestion des rôles : Admin (upline), Membre (downline).
+   - L’admin peut voir les prospects de son équipe.
+
+2. Gestion des prospects :
+   - Ajout / modification / suppression d’un prospect.
+   - Champs : nom, téléphone, e-mail, statut (nouveau, contacté, intéressé, inscrit, perdu), note, date de prochaine relance.
+   - Affichage sous forme de tableau et de cartes.
+   - Filtrage et recherche de prospects.
+
+3. Tâches et rappels :
+   - Liste de tâches par utilisateur.
+   - Notification automatique ou alerte visuelle quand une relance approche.
+
+4. Collaboration :
+   - Données synchronisées en temps réel entre membres de l’équipe.
+   - L’admin peut attribuer un prospect à un autre membre.
+
+5. Tableau de bord :
+   - Indicateurs clés : nombre total de prospects, prospects par statut, taux de conversion, relances prévues cette semaine.
+   - Graphiques simples (barres ou camemberts avec Recharts ou Chart.js).
+
+6. Interface utilisateur :
+   - Design moderne, clair et responsive.
+   - Palette de couleurs cohérente avec Phoenix for Marketing (orange, blanc, noir).
+   - Thème clair/foncé optionnel.
+
+Technologies à utiliser :
+Front-end :
+- React.js (Vite ou Next.js)
+- Tailwind CSS
+- Recharts ou Chart.js
+- React Router
+- PWA support
+
+Back-end / Base de données :
+- Firebase (Auth, Firestore, Storage, Cloud Messaging)
+
+Hébergement :
+- Vercel (front-end)
+- Firebase Hosting (si besoin)
+
+Gestion de version :
+- GitHub
+
+Structure du projet :
+/src
+ ├── components/
+ │    ├── Navbar.jsx
+ │    ├── ProspectCard.jsx
+ │    ├── TaskList.jsx
+ │    └── DashboardStats.jsx
+ ├── pages/
+ │    ├── Login.jsx
+ │    ├── Dashboard.jsx
+ │    ├── Prospects.jsx
+ │    ├── Tasks.jsx
+ │    └── Settings.jsx
+ ├── context/
+ │    └── AuthContext.jsx
+ ├── services/
+ │    └── firebase.js
+ ├── App.jsx
+ ├── main.jsx
+ └── index.css
+
+Structure de base de données (Firestore) :
+Collection users :
+{
+  uid: string,
+  name: string,
+  email: string,
+  role: 'admin' | 'member',
+  teamId: string
+}
+
+Collection prospects :
+{
+  id: string,
+  name: string,
+  phone: string,
+  email: string,
+  status: 'nouveau' | 'contacté' | 'intéressé' | 'inscrit' | 'perdu',
+  notes: string,
+  nextFollowUp: timestamp,
+  assignedTo: string (userId),
+  createdAt: timestamp,
+  teamId: string
+}
+
+Collection tasks :
+{
+  id: string,
+  title: string,
+  dueDate: timestamp,
+  completed: boolean,
+  userId: string,
+  teamId: string
+}
+
+Fonctionnalités techniques supplémentaires :
+- Mode hors ligne (cache PWA)
+- Synchronisation automatique au retour en ligne
+- Sécurité via Firebase Rules
+- Notifications locales pour relances
+
+Design attendu :
+- Style épuré, professionnel et motivant (inspiration CRM SaaS).
+- Icônes modernes (Lucide React).
+- Tableau de bord clair avec cartes et graphiques.
+- Animation légère (Framer Motion).
+
+Livrables attendus :
+1. Application web PWA complète (installable sur mobile)
+2. Code source propre et bien structuré
+3. Documentation pour déploiement et extension du projet
+4. Connexion avec Firebase déjà configurée
+5. Interface utilisateur prête à l’emploi
+
+Objectif final :
+Fournir à l’équipe Phoenix for Marketing une application centralisée et collaborative qui améliore :
+- La productivité,
+- Le suivi des prospects,
+- La coordination entre les membres,
+- Et l’efficacité globale du travail en network marketing.
