@@ -98,7 +98,7 @@ export default function Navbar() {
 
       {/* Mobile sidebar */}
       <motion.div
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-phoenix-black shadow-lg transform md:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 shadow-lg transform md:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } transition-transform duration-300 ease-in-out`}
         initial={false}
@@ -149,7 +149,7 @@ export default function Navbar() {
       </motion.div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 bg-phoenix-black shadow-lg">
+      <div className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 bg-gray-900 shadow-lg">
         <div className="flex items-center justify-center h-20 border-b border-phoenix-orange/20">
           {/* Phoenix Logo */}
           <img
