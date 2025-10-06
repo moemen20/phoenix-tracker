@@ -106,10 +106,12 @@ export default function Navbar() {
       >
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-center h-20 border-b border-gray-200 dark:border-gray-700">
-            {/* Logo placeholder */}
-            <div className="w-10 h-10 rounded-full bg-phoenix-orange flex items-center justify-center text-white text-xl font-bold">
-              P
-            </div>
+            {/* Phoenix Logo */}
+            <img
+              src="/phoenixLogo.png"
+              alt="Phoenix Tracker Logo"
+              className="w-10 h-10 object-contain"
+            />
             <span className="ml-2 text-xl font-semibold text-gray-800 dark:text-white">Phoenix Tracker</span>
           </div>
 

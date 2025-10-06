@@ -11,6 +11,7 @@ function MyApp({ Component, pageProps }) {
         <meta name="description" content="CRM Collaboratif pour Network Marketing" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/phoenixLogo.png" />
         <meta name="theme-color" content="#FF6B00" />
       </Head>
       <AuthProvider>
