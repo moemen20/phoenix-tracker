@@ -33,7 +33,7 @@ export default function Layout({ children }) {
       <Navbar />
 
       {/* Main content */}
-      <div className="flex-1 md:ml-64 p-3 sm:p-4 md:p-6 lg:p-8 overflow-auto">
+      <div className="flex-1 md:ml-64 p-3 sm:p-4 md:p-6 lg:p-8 overflow-auto bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
