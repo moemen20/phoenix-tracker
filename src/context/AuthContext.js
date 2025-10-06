@@ -190,6 +190,12 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     console.log('Setting up auth listener...');
 
+    // Force loading to complete immediately for now to fix loading issue
+    const immediateTimeout = setTimeout(() => {
+      console.log('Force completing auth loading immediately');
+      setLoading(false);
+    }, 100);
+
     if (!auth) {
       console.error('Firebase auth not available, skipping auth setup');
       setLoading(false);
@@ -240,7 +246,8 @@ export const AuthProvider = ({ children }) => {
     }, 2000);
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) unsubscribe();
+      clearTimeout(immediateTimeout);
       clearTimeout(timeout);
     };
   }, []);
