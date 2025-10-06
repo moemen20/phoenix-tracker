@@ -80,9 +80,9 @@ export default function Navbar() {
       <div className="fixed top-4 left-4 z-50 md:hidden">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+          className="p-3 rounded-lg bg-phoenix-orange text-white shadow-lg hover:bg-orange-600 focus:outline-none transition-colors"
         >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
+          {isOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
@@ -90,47 +90,47 @@ export default function Navbar() {
       <div className="fixed top-4 right-4 z-50">
         <button
           onClick={toggleDarkMode}
-          className="p-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+          className="p-3 rounded-lg bg-gray-800 dark:bg-gray-700 text-white shadow-lg hover:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none transition-colors"
         >
-          {darkMode ? <Sun size={24} /> : <Moon size={24} />}
+          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </div>
 
       {/* Mobile sidebar */}
       <motion.div
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 shadow-lg transform md:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] bg-gray-900 shadow-xl transform md:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } transition-transform duration-300 ease-in-out`}
         initial={false}
         animate={isOpen ? { x: 0 } : { x: '-100%' }}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-center h-20 border-b border-phoenix-orange/20">
+          <div className="flex items-center justify-center h-16 px-4 border-b border-phoenix-orange/20">
             {/* Phoenix Logo */}
             <img
               src="/phoenixLogo.png"
               alt="Phoenix Tracker Logo"
-              className="w-10 h-10 object-contain"
+              className="w-8 h-8 object-contain"
             />
-            <span className="ml-2 text-xl font-semibold text-phoenix-orange">Phoenix Tracker</span>
+            <span className="ml-2 text-lg font-semibold text-phoenix-orange truncate">Phoenix Tracker</span>
           </div>
 
-          <nav className="flex-1 px-2 py-4 space-y-1">
+          <nav className="flex-1 px-4 py-6 space-y-2">
             {getNavItems().map((item) => {
               const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${
+                  className={`flex items-center px-4 py-3 text-base font-medium rounded-lg transition-colors ${
                     router.pathname === item.href
-                      ? 'bg-phoenix-orange text-phoenix-black'
-                      : 'text-phoenix-white hover:bg-phoenix-orange/10'
+                      ? 'bg-phoenix-orange text-phoenix-black shadow-md'
+                      : 'text-phoenix-white hover:bg-phoenix-orange/10 active:bg-phoenix-orange/20'
                   }`}
                   onClick={() => setIsOpen(false)}
                 >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
+                  <Icon className="mr-4 h-6 w-6 flex-shrink-0" />
+                  <span className="truncate">{item.name}</span>
                 </Link>
               );
             })}
@@ -139,9 +139,9 @@ export default function Navbar() {
           <div className="p-4 border-t border-phoenix-orange/20">
             <button
               onClick={handleLogout}
-              className="flex items-center w-full px-4 py-2 text-sm font-medium text-phoenix-white hover:bg-phoenix-orange/10 rounded-md"
+              className="flex items-center w-full px-4 py-3 text-base font-medium text-phoenix-white hover:bg-phoenix-orange/10 active:bg-phoenix-orange/20 rounded-lg transition-colors"
             >
-              <LogOut className="mr-3 h-5 w-5" />
+              <LogOut className="mr-4 h-6 w-6" />
               Sign out
             </button>
           </div>
