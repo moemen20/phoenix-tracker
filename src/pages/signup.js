@@ -57,10 +57,12 @@ export default function Signup() {
       >
         <div>
           <div className="flex justify-center">
-            {/* Logo placeholder - replace with actual logo */}
-            <div className="w-20 h-20 rounded-full bg-phoenix-orange flex items-center justify-center text-white text-2xl font-bold">
-              P
-            </div>
+            {/* Phoenix Logo */}
+            <img
+              src="/phoenixLogo.png"
+              alt="Phoenix Tracker Logo"
+              className="w-20 h-20 object-contain"
+            />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
             Create your account
