@@ -5,13 +5,13 @@ import { getStorage } from 'firebase/storage';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAYz021lu_J2lmCwYpKE4K4GXekfLvGaao",
-  authDomain: "phoenix-prospects.firebaseapp.com",
-  projectId: "phoenix-prospects",
-  storageBucket: "phoenix-prospects.firebasestorage.app",
-  messagingSenderId: "739609384205",
-  appId: "1:739609384205:web:2b9f4151ed11b074b78c44",
-  measurementId: "G-LG8LGZ7WFE"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAYz021lu_J2lmCwYpKE4K4GXekfLvGaao",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "phoenix-prospects.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "phoenix-prospects",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "phoenix-prospects.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "739609384205",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:739609384205:web:2b9f4151ed11b074b78c44",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-LG8LGZ7WFE"
 };
 
 // Initialize Firebase
