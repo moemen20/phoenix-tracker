@@ -21,7 +21,7 @@ import {
 } from '../services/firestore';
 
 export default function Downlines() {
-  const { currentUser, userType, teamId, getDownlines } = useAuth();
+  const { currentUser, userType, teamId, personalTeamId, getDownlines } = useAuth();
   const [downlines, setDownlines] = useState([]);
   const [downlineStats, setDownlineStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function Downlines() {
 
   const loadDownlines = async () => {
     try {
-      const downlineUsers = await getDownlines(teamId);
+      const downlineUsers = await getDownlines(personalTeamId);
       setDownlines(downlineUsers);
 
       // Load stats for each downline
@@ -88,7 +88,7 @@ export default function Downlines() {
   };
 
   const copyTeamId = () => {
-    navigator.clipboard.writeText(teamId);
+    navigator.clipboard.writeText(personalTeamId);
     setCopiedTeamId(true);
     setTimeout(() => setCopiedTeamId(false), 2000);
   };
@@ -119,7 +119,7 @@ export default function Downlines() {
         <div className="mt-4 md:mt-0 flex items-center space-x-2">
           <span className="text-sm text-gray-600 dark:text-gray-300">Your Team ID:</span>
           <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">
-            {teamId}
+            {personalTeamId}
           </code>
           <button
             onClick={copyTeamId}

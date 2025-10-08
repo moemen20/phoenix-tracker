@@ -10,9 +10,97 @@ import {
   query,
   where,
   orderBy,
-  limit,
   onSnapshot
 } from 'firebase/firestore';
+
+// Personal files collection functions (free - no Firebase Storage costs)
+export const savePersonalFile = async (file, userId) => {
+  try {
+    console.log('Saving personal file:', file.name, 'Size:', file.size);
+
+    // Convert file to base64 for small files (under 1MB)
+    let fileData = null;
+    if (file.size <= 1024 * 1024) { // 1MB limit for base64 storage
+      fileData = await fileToBase64(file);
+      console.log('File converted to base64, length:', fileData.length);
+    } else {
+      console.warn('File too large for local storage, storing metadata only');
+    }
+
+    // Save file metadata to Firestore (free)
+    const fileMetadata = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      userId: userId,
+      uploadedAt: new Date(),
+      data: fileData, // base64 data for small files, null for large files
+      localStorage: !fileData // indicates if file is too large for local storage
+    };
+
+    console.log('Saving file metadata to Firestore...');
+    const docRef = await addDoc(collection(db, 'personalFiles'), fileMetadata);
+    console.log('Personal file metadata saved successfully, doc ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving personal file:', error);
+    throw error;
+  }
+};
+
+export const deletePersonalFile = async (fileId) => {
+  try {
+    console.log('Deleting personal file:', fileId);
+    await deleteDoc(doc(db, 'personalFiles', fileId));
+    console.log('Personal file deleted successfully');
+  } catch (error) {
+    console.error('Error deleting personal file:', error);
+    throw error;
+  }
+};
+
+export const getPersonalFiles = async (userId) => {
+  try {
+    const q = query(
+      collection(db, 'personalFiles'),
+      where('userId', '==', userId),
+      orderBy('uploadedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting personal files:', error);
+    throw error;
+  }
+};
+
+// Real-time listeners for personal files
+export const subscribeToPersonalFiles = (userId, callback) => {
+  const q = query(
+    collection(db, 'personalFiles'),
+    where('userId', '==', userId),
+    orderBy('uploadedAt', 'desc')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    callback(files);
+  });
+};
+
+// Helper function to convert file to base64
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      // Remove the data URL prefix (e.g., "data:image/png;base64,")
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = error => reject(error);
+  });
+};
 
 // Prospects collection functions
 export const addProspect = async (prospectData) => {
@@ -93,11 +181,18 @@ export const getProspect = async (id) => {
 // Tasks collection functions
 export const addTask = async (taskData) => {
   try {
-    const docRef = await addDoc(collection(db, 'tasks'), {
+    // Convert dueDate string to Firestore timestamp if it exists
+    const processedData = {
       ...taskData,
       completed: false,
       createdAt: new Date().toISOString()
-    });
+    };
+
+    if (taskData.dueDate) {
+      processedData.dueDate = new Date(taskData.dueDate);
+    }
+
+    const docRef = await addDoc(collection(db, 'tasks'), processedData);
     return docRef.id;
   } catch (error) {
     console.error('Error adding task:', error);
@@ -191,31 +286,61 @@ export const getDashboardStats = async (teamId) => {
   }
 };
 
+// Get downlines for an upline (users who joined using this upline's personalTeamId)
+export const getDownlinesForUpline = async (uplinePersonalTeamId) => {
+  try {
+    console.log('Getting downlines for upline personalTeamId:', uplinePersonalTeamId);
+    const q = query(collection(db, 'users'), where('uplineTeamId', '==', uplinePersonalTeamId));
+    const snapshot = await getDocs(q);
+    const downlines = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('Found downlines:', downlines.length);
+    return downlines;
+  } catch (error) {
+    console.error('Error getting downlines for upline:', error);
+    return [];
+  }
+};
+
 // Upline dashboard stats - aggregates data from all downlines
 export const getUplineDashboardStats = async (uplineTeamId) => {
   try {
     console.log('Getting upline dashboard stats for teamId:', uplineTeamId);
 
-    // Get all users in this team (including upline and downlines)
-    const allTeamUsers = await getTeamUsers(uplineTeamId);
-    console.log('All team users:', allTeamUsers);
-
-    // Filter to get only downlines
-    const downlines = allTeamUsers.filter(user => user.userType === 'downline');
+    // Get all downlines who joined using this upline's teamId
+    const downlines = await getDownlinesForUpline(uplineTeamId);
     console.log('Downlines found:', downlines.length);
 
     let totalProspects = 0;
     let totalTasks = [];
     let prospectsByStatus = {};
 
+    // Also include upline's own data
+    console.log('Including upline own data for teamId:', uplineTeamId);
+    try {
+      const uplineProspects = await getProspects(uplineTeamId);
+      const uplineTasks = await getTasks(null, uplineTeamId);
+
+      console.log(`Upline has ${uplineProspects.length} prospects and ${uplineTasks.length} tasks`);
+
+      totalProspects += uplineProspects.length;
+      totalTasks = totalTasks.concat(uplineTasks);
+
+      // Aggregate upline's prospects by status
+      uplineProspects.forEach(prospect => {
+        prospectsByStatus[prospect.status] = (prospectsByStatus[prospect.status] || 0) + 1;
+      });
+    } catch (error) {
+      console.warn(`Error getting upline data:`, error);
+    }
+
     // Aggregate data from all downlines
     for (const downline of downlines) {
       try {
-        console.log('Processing downline:', downline.name, 'teamId:', downline.teamId);
+        console.log('Processing downline:', downline.name || downline.email, 'teamId:', downline.teamId);
         const prospects = await getProspects(downline.teamId);
         const tasks = await getTasks(null, downline.teamId);
 
-        console.log(`Downline ${downline.name} has ${prospects.length} prospects and ${tasks.length} tasks`);
+        console.log(`Downline ${downline.name || downline.email} has ${prospects.length} prospects and ${tasks.length} tasks`);
 
         totalProspects += prospects.length;
         totalTasks = totalTasks.concat(tasks);

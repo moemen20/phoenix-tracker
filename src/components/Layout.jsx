@@ -10,7 +10,10 @@ export default function Layout({ children }) {
   useEffect(() => {
     // If not loading and no user is logged in, redirect to login
     if (!loading && !currentUser && router.pathname !== '/login' && router.pathname !== '/signup') {
+      console.log('Layout: No user found, redirecting to login from:', router.pathname);
       router.push('/login');
+    } else {
+      console.log('Layout: Auth check - loading:', loading, 'currentUser:', !!currentUser, 'pathname:', router.pathname);
     }
   }, [currentUser, loading, router.pathname]);
 

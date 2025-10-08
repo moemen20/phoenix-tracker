@@ -8,7 +8,7 @@ import { getDashboardStats, getUplineDashboardStats } from '../services/firestor
 
 export default function Dashboard() {
   const router = useRouter();
-  const { currentUser, teamId, userType, loading: authLoading } = useAuth();
+  const { currentUser, teamId, personalTeamId, userType, loading: authLoading } = useAuth();
   const [dashboardStats, setDashboardStats] = useState({
     totalProspects: 0,
     prospectsByStatus: {},
@@ -53,7 +53,7 @@ export default function Dashboard() {
         let stats;
         if (userType === 'upline') {
           try {
-            stats = await getUplineDashboardStats(teamId);
+            stats = await getUplineDashboardStats(personalTeamId);
           } catch (uplineError) {
             console.warn('Upline stats failed, falling back to regular stats:', uplineError);
             stats = await getDashboardStats(teamId);
@@ -88,7 +88,7 @@ export default function Dashboard() {
     }, 10000);
 
     return () => clearTimeout(timeout);
-  }, [teamId, userType]);
+  }, [teamId, personalTeamId, userType]);
 
   const getStats = () => {
     const baseStats = [

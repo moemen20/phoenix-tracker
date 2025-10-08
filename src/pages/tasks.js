@@ -18,6 +18,7 @@ import {
   deleteTask,
   subscribeToTasks
 } from '../services/firestore';
+import { notificationService } from '../services/notifications';
 
 export default function Tasks() {
   const { currentUser, teamId, userRole } = useAuth();
@@ -25,9 +26,11 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState('default');
   const [formData, setFormData] = useState({
     title: '',
     dueDate: '',
+    dueTime: '',
     completed: false,
     userId: ''
   });
@@ -43,14 +46,52 @@ export default function Tasks() {
     return unsubscribe;
   }, [teamId]);
 
+  // Initialize notifications
+  useEffect(() => {
+    const initializeNotifications = async () => {
+      const initialPermission = notificationService.getPermissionStatus();
+      setNotificationPermission(initialPermission);
+
+      // Request permission if not already granted
+      if (initialPermission === 'default') {
+        const permission = await notificationService.requestPermission();
+        setNotificationPermission(permission);
+      }
+
+      // Start checking for upcoming tasks if permission granted
+      if (notificationService.permissionsGranted && currentUser?.uid) {
+        notificationService.startTaskChecking(tasks, currentUser.uid);
+      }
+    };
+
+    if (!loading && currentUser?.uid) {
+      initializeNotifications();
+    }
+
+    return () => {
+      notificationService.stopTaskChecking();
+    };
+  }, [loading, tasks, currentUser?.uid]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const taskData = {
+      let taskData = {
         ...formData,
         userId: formData.userId || currentUser.uid,
         teamId
       };
+
+      // Combine date and time if both are provided
+      if (formData.dueDate && formData.dueTime) {
+        const combinedDateTime = new Date(`${formData.dueDate}T${formData.dueTime}`);
+        taskData.dueDate = combinedDateTime;
+      } else if (formData.dueDate) {
+        // If only date is provided, set time to end of day
+        const dateOnly = new Date(formData.dueDate);
+        dateOnly.setHours(23, 59, 59, 999);
+        taskData.dueDate = dateOnly;
+      }
 
       if (editingTask) {
         await updateTask(editingTask.id, taskData);
@@ -68,7 +109,8 @@ export default function Tasks() {
     setEditingTask(task);
     setFormData({
       title: task.title || '',
-      dueDate: task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split('T')[0] : '',
+      dueDate: task.dueDate ? formatDateForInput(task.dueDate) : '',
+      dueTime: task.dueTime ? formatTimeForInput(task.dueDate) : '',
       completed: task.completed || false,
       userId: task.userId || ''
     });
@@ -97,6 +139,7 @@ export default function Tasks() {
     setFormData({
       title: '',
       dueDate: '',
+      dueTime: '',
       completed: false,
       userId: ''
     });
@@ -106,17 +149,63 @@ export default function Tasks() {
   const isOverdue = (dueDate) => {
     if (!dueDate) return false;
     const now = new Date();
-    const due = new Date(dueDate.seconds * 1000);
+    const due = new Date(dueDate.seconds ? dueDate.seconds * 1000 : dueDate);
     return due < now;
   };
 
   const isDueSoon = (dueDate) => {
     if (!dueDate) return false;
     const now = new Date();
-    const due = new Date(dueDate.seconds * 1000);
+    const due = new Date(dueDate.seconds ? dueDate.seconds * 1000 : dueDate);
     const diffTime = due - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 1 && diffDays >= 0;
+    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+    return diffHours <= 2 && diffHours >= 0;
+  };
+
+  // Helper function to format date for input field (handles both timestamp objects and strings)
+  const formatDateForInput = (dueDate) => {
+    if (!dueDate) return '';
+    // Check if it's a Firestore timestamp object
+    if (dueDate.seconds) {
+      return new Date(dueDate.seconds * 1000).toISOString().split('T')[0];
+    }
+    // Otherwise assume it's already a date string or Date object
+    return new Date(dueDate).toISOString().split('T')[0];
+  };
+
+  // Helper function to format date for display (handles both timestamp objects and strings)
+  const formatDateForDisplay = (dueDate) => {
+    if (!dueDate) return '';
+    // Check if it's a Firestore timestamp object
+    if (dueDate.seconds) {
+      return new Date(dueDate.seconds * 1000).toLocaleDateString();
+    }
+    // Otherwise assume it's already a date string or Date object
+    return new Date(dueDate).toLocaleDateString();
+  };
+
+  // Helper function to format time for input field (handles both timestamp objects and strings)
+  const formatTimeForInput = (dueDate) => {
+    if (!dueDate) return '';
+    // Check if it's a Firestore timestamp object
+    if (dueDate.seconds) {
+      return new Date(dueDate.seconds * 1000).toTimeString().slice(0, 5);
+    }
+    // Otherwise assume it's already a date string or Date object
+    return new Date(dueDate).toTimeString().slice(0, 5);
+  };
+
+  // Helper function to format date and time for display (handles both timestamp objects and strings)
+  const formatDateTimeForDisplay = (dueDate) => {
+    if (!dueDate) return '';
+    // Check if it's a Firestore timestamp object
+    if (dueDate.seconds) {
+      const date = new Date(dueDate.seconds * 1000);
+      return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+    }
+    // Otherwise assume it's already a date string or Date object
+    const date = new Date(dueDate);
+    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
   };
 
   const activeTasks = tasks.filter(task => !task.completed);
@@ -139,6 +228,43 @@ export default function Tasks() {
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
             Manage your daily tasks and follow-ups
           </p>
+          {/* Notification Status */}
+          <div className="mt-2 flex items-center space-x-2 text-xs">
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+              notificationPermission === 'granted'
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                : notificationPermission === 'denied' || notificationPermission === 'https-required'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+            }`}>
+              {notificationPermission === 'granted' && '🔔 Notifications enabled'}
+              {notificationPermission === 'denied' && '🚫 Notifications blocked'}
+              {notificationPermission === 'https-required' && '🔒 HTTPS required for notifications'}
+              {notificationPermission === 'default' && '⏰ Enable notifications for reminders'}
+              {notificationPermission === 'not-supported' && '📱 Notifications not supported'}
+            </span>
+            {(notificationPermission === 'default' || notificationPermission === 'denied') && (
+              <button
+                onClick={async () => {
+                  console.log('Enable notifications button clicked');
+                  try {
+                    const permission = await notificationService.requestPermission();
+                    console.log('Permission result:', permission);
+                    setNotificationPermission(permission);
+                    if (permission === 'granted' && currentUser?.uid) {
+                      console.log('Starting task checking for user:', currentUser.uid);
+                      notificationService.startTaskChecking(tasks, currentUser.uid);
+                    }
+                  } catch (error) {
+                    console.error('Error requesting notification permission:', error);
+                  }
+                }}
+                className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-phoenix-orange"
+              >
+                Enable Notifications
+              </button>
+            )}
+          </div>
         </div>
         <button
           onClick={() => {
@@ -195,20 +321,16 @@ export default function Tasks() {
                       }`}>
                         {task.title}
                       </h3>
-                      {task.dueDate && (
-                        <div className="flex items-center mt-1">
-                          <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                          <span className={`text-xs ${
-                            isOverdue(task.dueDate) ? 'text-red-500' :
-                            isDueSoon(task.dueDate) ? 'text-yellow-500' :
-                            'text-gray-500 dark:text-gray-400'
-                          }`}>
-                            Due {new Date(task.dueDate.seconds * 1000).toLocaleDateString()}
-                            {isOverdue(task.dueDate) && ' (Overdue)'}
-                            {isDueSoon(task.dueDate) && ' (Due Soon)'}
-                          </span>
-                        </div>
-                      )}
+                     {task.dueDate && (
+                       <div className="flex items-center mt-1">
+                         <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                         <span className={`text-xs ${isOverdue(task.dueDate) ? 'text-red-500' : isDueSoon(task.dueDate) ? 'text-yellow-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                           Due {formatDateTimeForDisplay(task.dueDate)}
+                           {isOverdue(task.dueDate) && ' (Overdue)'}
+                           {isDueSoon(task.dueDate) && ' (Due Soon)'}
+                         </span>
+                       </div>
+                     )}
                     </div>
                   </div>
                   <div className="flex space-x-2">
@@ -264,7 +386,7 @@ export default function Tasks() {
                         <div className="flex items-center mt-1">
                           <Calendar className="h-4 w-4 mr-1 text-gray-400" />
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Completed {new Date(task.dueDate.seconds * 1000).toLocaleDateString()}
+                            Completed {formatDateTimeForDisplay(task.dueDate)}
                           </span>
                         </div>
                       )}
@@ -320,17 +442,32 @@ export default function Tasks() {
                           />
                         </div>
 
-                        <div>
-                          <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Due Date
-                          </label>
-                          <input
-                            type="date"
-                            id="dueDate"
-                            value={formData.dueDate}
-                            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-phoenix-orange focus:border-phoenix-orange sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                          />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Due Date
+                            </label>
+                            <input
+                              type="date"
+                              id="dueDate"
+                              value={formData.dueDate}
+                              onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-phoenix-orange focus:border-phoenix-orange sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="dueTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Due Time
+                            </label>
+                            <input
+                              type="time"
+                              id="dueTime"
+                              value={formData.dueTime}
+                              onChange={(e) => setFormData({ ...formData, dueTime: e.target.value })}
+                              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-phoenix-orange focus:border-phoenix-orange sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            />
+                          </div>
                         </div>
 
                         {userRole === 'admin' && (

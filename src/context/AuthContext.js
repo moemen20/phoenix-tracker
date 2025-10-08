@@ -20,6 +20,7 @@ export const AuthProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(null);
   const [userType, setUserType] = useState(null);
   const [teamId, setTeamId] = useState(null);
+  const [personalTeamId, setPersonalTeamId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Sign up function
@@ -37,13 +38,14 @@ export const AuthProvider = ({ children }) => {
     });
 
     let finalTeamId;
+    let personalTeamId;
     let role = 'member';
-
-    // Every user gets their own unique team ID (for building their own network)
-    finalTeamId = generateTeamId();
 
     if (userType === 'upline') {
       role = 'upline';
+      // Uplines get their own teamId for data access and personal network
+      finalTeamId = generateTeamId();
+      personalTeamId = finalTeamId; // Same for uplines
     } else if (userType === 'downline' && uplineTeamId) {
       // Verify upline team ID exists
       const uplineExists = await verifyUplineTeamId(uplineTeamId);
@@ -51,6 +53,9 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid upline team ID. Please check and try again.');
       }
       role = 'downline';
+      // Downlines use upline's teamId for data access, but get their own personal teamId for sub-network
+      finalTeamId = uplineTeamId; // Use upline's team for data access
+      personalTeamId = generateTeamId(); // Generate unique ID for their own network
     } else {
       throw new Error('Please specify whether you are an upline or provide a valid upline team ID.');
     }
@@ -62,10 +67,13 @@ export const AuthProvider = ({ children }) => {
       email,
       role: role, // Keep for backward compatibility
       userType: userType, // New field for upline/downline system
-      teamId: finalTeamId, // Every user gets their own team ID
+      teamId: finalTeamId, // Team ID for data access (shared with upline for downlines)
+      personalTeamId: personalTeamId, // Unique team ID for building their own network
       uplineTeamId: userType === 'downline' ? uplineTeamId : null, // Reference to upline
       createdAt: new Date().toISOString()
     });
+
+    console.log(`Created ${userType} user: teamId=${finalTeamId}, personalTeamId=${personalTeamId}, uplineTeamId=${uplineTeamId || 'none'}`);
 
     return userCredential.user;
   };
@@ -80,8 +88,8 @@ export const AuthProvider = ({ children }) => {
 
   // Google sign in function
   const signInWithGoogle = async () => {
-    if (!auth || !db) {
-      throw new Error('Firebase services not available');
+    if (!auth) {
+      throw new Error('Firebase auth not available');
     }
 
     const provider = new GoogleAuthProvider();
@@ -89,21 +97,8 @@ export const AuthProvider = ({ children }) => {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user document exists, if not create one
-      const userData = await getUserData(user.uid);
-      if (!userData) {
-        // Create user document with default role and team
-        const name = user.displayName || user.email.split('@')[0];
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          name,
-          email: user.email,
-          role: 'member', // Default to member for Google sign-in
-          teamId: 'default-team', // Default team
-          createdAt: new Date().toISOString()
-        });
-      }
-
+      console.log('Google sign-in successful for user:', user.email);
+      // User document creation is now handled in the auth state change listener
       return user;
     } catch (error) {
       console.error('Error signing in with Google:', error);
@@ -112,11 +107,29 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Sign out function
-  const logout = () => {
+  const logout = async () => {
     if (!auth) {
       throw new Error('Firebase auth not available');
     }
-    return signOut(auth);
+
+    try {
+      console.log('Signing out user:', currentUser?.email);
+      await signOut(auth);
+      console.log('User signed out successfully');
+
+      // Clear all local state
+      setCurrentUser(null);
+      setUserRole(null);
+      setUserType(null);
+      setTeamId(null);
+      setPersonalTeamId(null);
+      setLoading(false);
+
+      console.log('All user data cleared');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    }
   };
 
   // Generate unique team ID for uplines
@@ -146,25 +159,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Get downlines for an upline
+  // Get downlines for an upline - import from firestore service
   const getDownlines = async (uplineTeamId) => {
-    if (!db) {
-      console.warn('Firestore not available, cannot get downlines');
-      return [];
-    }
-
-    try {
-      const q = query(collection(db, 'users'), where('uplineTeamId', '==', uplineTeamId));
-      const querySnapshot = await getDocs(q);
-      const downlines = [];
-      querySnapshot.forEach((doc) => {
-        downlines.push({ id: doc.id, ...doc.data() });
-      });
-      return downlines;
-    } catch (error) {
-      console.error('Error getting downlines:', error);
-      return [];
-    }
+    // Import the function dynamically to avoid circular dependencies
+    const { getDownlinesForUpline } = await import('../services/firestore');
+    return getDownlinesForUpline(uplineTeamId);
   };
 
   // Get user data from Firestore
@@ -205,33 +204,123 @@ export const AuthProvider = ({ children }) => {
     let listenerCalled = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed, user:', user?.email);
+      console.log('Auth state changed, user:', user?.email, 'uid:', user?.uid);
       listenerCalled = true;
+
+      // Clear any cached data when user changes
+      if (user !== currentUser) {
+        console.log('User changed, clearing cached data');
+        // This will help ensure no data mixing between users
+      }
 
       setCurrentUser(user);
 
       if (user) {
+        console.log('Processing authenticated user...');
         try {
           // Get user role from Firestore
-          const userData = await getUserData(user.uid);
+          let userData = await getUserData(user.uid);
           console.log('User data from Firestore:', userData);
-          setUserRole(userData?.role || 'member');
-          setUserType(userData?.userType || 'downline');
-          setTeamId(userData?.teamId || 'default-team');
-          console.log('Set userType to:', userData?.userType, 'teamId to:', userData?.teamId);
+
+          // If user document doesn't exist, create it (for Google sign-in users)
+          if (!userData) {
+            console.log('User document not found, creating default document for user');
+            const name = user.displayName || user.email.split('@')[0];
+            const uniqueTeamId = generateTeamId();
+            const defaultUserData = {
+              uid: user.uid,
+              name,
+              email: user.email,
+              role: 'member',
+              userType: 'upline',
+              teamId: uniqueTeamId,
+              personalTeamId: uniqueTeamId,
+              createdAt: new Date().toISOString()
+            };
+
+            await setDoc(doc(db, 'users', user.uid), defaultUserData);
+            userData = defaultUserData;
+            console.log('Created default user document:', defaultUserData);
+          } else {
+            console.log('Found existing user document');
+          }
+
+          // Migrate old users if needed
+          if (userData) {
+            let needsUpdate = false;
+            const updates = {};
+
+            // Migrate old users with 'default-team' to unique team IDs
+            if (userData.teamId === 'default-team') {
+              console.log('Migrating user from default-team to unique team ID');
+              const newTeamId = generateTeamId();
+              updates.teamId = newTeamId;
+              updates.personalTeamId = newTeamId; // Set personalTeamId for uplines
+              userData.teamId = newTeamId;
+              userData.personalTeamId = newTeamId;
+              needsUpdate = true;
+            }
+
+            // Ensure all users have personalTeamId field
+            if (!userData.personalTeamId) {
+              console.log('Adding personalTeamId to existing user');
+              if (userData.userType === 'downline') {
+                updates.personalTeamId = generateTeamId(); // Downlines get new personal ID
+              } else {
+                updates.personalTeamId = userData.teamId || generateTeamId(); // Uplines use their teamId
+              }
+              userData.personalTeamId = updates.personalTeamId;
+              needsUpdate = true;
+            }
+
+            // Ensure userType is set
+            if (!userData.userType) {
+              updates.userType = 'upline'; // Default to upline
+              userData.userType = 'upline';
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+              console.log('User migrated with updates:', updates);
+            }
+          }
+
+          // Set user state with validated data
+          const finalRole = userData?.role || 'member';
+          const finalUserType = userData?.userType || 'upline';
+          const finalTeamId = userData?.teamId || generateTeamId();
+          const finalPersonalTeamId = userData?.personalTeamId || userData?.teamId || generateTeamId();
+
+          setUserRole(finalRole);
+          setUserType(finalUserType);
+          setTeamId(finalTeamId);
+          setPersonalTeamId(finalPersonalTeamId);
+
+          console.log('✅ User auth setup complete:', {
+            role: finalRole,
+            userType: finalUserType,
+            teamId: finalTeamId,
+            personalTeamId: finalPersonalTeamId
+          });
         } catch (error) {
-          console.warn('Failed to get user data from Firestore:', error);
+          console.warn('❌ Failed to get user data from Firestore:', error);
           // Set default values if Firestore fails
           setUserRole('member');
-          setUserType('downline');
-          setTeamId('default-team');
+          setUserType('upline');
+          const defaultTeamId = generateTeamId();
+          setTeamId(defaultTeamId);
+          setPersonalTeamId(defaultTeamId);
         }
       } else {
+        console.log('No authenticated user');
         setUserRole(null);
         setUserType(null);
         setTeamId(null);
+        setPersonalTeamId(null);
       }
 
+      console.log('Setting loading to false');
       setLoading(false);
     });
 
@@ -257,6 +346,7 @@ export const AuthProvider = ({ children }) => {
     userRole,
     userType,
     teamId,
+    personalTeamId,
     signup,
     login,
     logout,

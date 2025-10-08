@@ -48,10 +48,10 @@ export default function Contacts() {
     const unsubscribe = subscribeToContacts(teamId, (contactsData) => {
       setContacts(contactsData);
       setLoading(false);
-    }, { state: stateFilter, job: jobFilter });
+    });
 
     return unsubscribe;
-  }, [teamId, stateFilter, jobFilter]);
+  }, [teamId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -122,7 +122,9 @@ export default function Contacts() {
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.surname.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.phone.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+    const matchesState = !stateFilter || contact.state === stateFilter;
+    const matchesJob = !jobFilter || contact.job === jobFilter;
+    return matchesSearch && matchesState && matchesJob;
   });
 
   if (loading) {
@@ -220,77 +222,82 @@ export default function Contacts() {
         </div>
       </div>
 
-      {/* Contacts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredContacts.map((contact) => (
-          <motion.div
-            key={contact.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  {contact.name} {contact.surname}
-                </h3>
-                {contact.state && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                    {contact.state.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {contact.age && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <User className="h-4 w-4 mr-2" />
-                    Age: {contact.age}
-                  </div>
-                )}
-                {contact.phone && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <Phone className="h-4 w-4 mr-2" />
-                    {contact.phone}
-                  </div>
-                )}
-                {contact.email && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <Mail className="h-4 w-4 mr-2" />
-                    {contact.email}
-                  </div>
-                )}
-                {(contact.job || contact.jobOther) && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <Briefcase className="h-4 w-4 mr-2" />
-                    {contact.job === 'other' ? contact.jobOther : contact.job}
-                  </div>
-                )}
-                {contact.state && (
-                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    {contact.state}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-2">
-                <button
-                  onClick={() => handleEdit(contact)}
-                  className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-phoenix-orange"
+      {/* Contacts Table */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Name
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Age
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Phone
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Email
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Job
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  State
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredContacts.map((contact) => (
+                <motion.tr
+                  key={contact.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(contact.id)}
-                  className="inline-flex items-center px-3 py-1 border border-red-300 dark:border-red-600 rounded-md text-sm font-medium text-red-700 dark:text-red-200 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    {contact.name} {contact.surname}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                    {contact.age || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                    {contact.phone || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                    {contact.email || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                    {contact.job === 'other' ? (contact.jobOther || 'Other') : (contact.job || '-')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                    {contact.state ? contact.state.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => handleEdit(contact)}
+                        className="text-phoenix-orange hover:text-orange-700 dark:text-phoenix-orange dark:hover:text-orange-400"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(contact.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {filteredContacts.length === 0 && (
