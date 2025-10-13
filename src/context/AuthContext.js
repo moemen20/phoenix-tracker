@@ -16,12 +16,74 @@ const AuthContext = createContext({});
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [userType, setUserType] = useState(null);
-  const [teamId, setTeamId] = useState(null);
-  const [personalTeamId, setPersonalTeamId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  console.log('🔥 AuthProvider component rendered');
+
+  // Initialize with session data if available
+  const initializeFromSession = () => {
+    // Check if we're in browser environment
+    if (typeof window === 'undefined' || !window.localStorage) {
+      console.log('📂 Skipping session initialization - not in browser');
+      return null;
+    }
+
+    try {
+      const sessionData = localStorage.getItem('phoenix_auth_session');
+      if (sessionData) {
+        const session = JSON.parse(sessionData);
+        // Check if session is not too old (24 hours)
+        if (Date.now() - session.timestamp < 24 * 60 * 60 * 1000 && session.role && session.userType && session.teamId) {
+          console.log('📂 Initializing from stored session');
+
+          const mockUser = {
+            uid: session.uid,
+            email: session.email,
+            displayName: session.displayName,
+            emailVerified: true,
+            isAnonymous: false,
+            providerData: [{
+              providerId: 'password',
+              uid: session.uid,
+              displayName: session.displayName,
+              email: session.email
+            }]
+          };
+
+          return {
+            currentUser: mockUser,
+            userRole: session.role,
+            userType: session.userType,
+            teamId: session.teamId,
+            personalTeamId: session.personalTeamId,
+            loading: false
+          };
+        } else {
+          console.log('🗑️ Stored session expired or invalid');
+          localStorage.removeItem('phoenix_auth_session');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to initialize from session:', error);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          localStorage.removeItem('phoenix_auth_session');
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+    return null;
+  };
+
+  const sessionData = initializeFromSession();
+
+  const [currentUser, setCurrentUser] = useState(sessionData?.currentUser || null);
+  const [userRole, setUserRole] = useState(sessionData?.userRole || null);
+  const [userType, setUserType] = useState(sessionData?.userType || null);
+  const [teamId, setTeamId] = useState(sessionData?.teamId || null);
+  const [personalTeamId, setPersonalTeamId] = useState(sessionData?.personalTeamId || null);
+  const [loading, setLoading] = useState(sessionData ? false : true);
+
+  console.log('🔥 AuthProvider state initialized, loading:', loading, 'currentUser:', !!currentUser);
 
   // Sign up function
   const signup = async (email, password, name, userType = 'downline', uplineTeamId = null) => {
@@ -74,16 +136,37 @@ export const AuthProvider = ({ children }) => {
     });
 
     console.log(`Created ${userType} user: teamId=${finalTeamId}, personalTeamId=${personalTeamId}, uplineTeamId=${uplineTeamId || 'none'}`);
+    console.log(`Signup result: userType=${userType}, finalTeamId=${finalTeamId}, personalTeamId=${personalTeamId}`);
 
     return userCredential.user;
   };
 
   // Sign in function
-  const login = (email, password) => {
+  const login = async (email, password) => {
     if (!auth) {
       throw new Error('Firebase auth not available');
     }
-    return signInWithEmailAndPassword(auth, email, password);
+
+    try {
+      console.log('Attempting login...');
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ Login successful');
+
+      // Store session info for persistence
+      const sessionData = {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('phoenix_auth_session', JSON.stringify(sessionData));
+      console.log('💾 Auth session stored in localStorage');
+
+      return result;
+    } catch (error) {
+      console.error('❌ Login failed:', error);
+      throw error;
+    }
   };
 
   // Google sign in function
@@ -92,16 +175,18 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Firebase auth not available');
     }
 
-    const provider = new GoogleAuthProvider();
     try {
+      console.log('Attempting Google sign-in...');
+      const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      console.log('Google sign-in successful for user:', user.email);
+      console.log('✅ Google sign-in successful for user:', user.email);
+
       // User document creation is now handled in the auth state change listener
       return user;
     } catch (error) {
-      console.error('Error signing in with Google:', error);
+      console.error('❌ Error signing in with Google:', error);
       throw error;
     }
   };
@@ -117,6 +202,7 @@ export const AuthProvider = ({ children }) => {
       await signOut(auth);
       console.log('User signed out successfully');
 
+      // Firebase persistence will handle clearing the auth state
       // Clear all local state
       setCurrentUser(null);
       setUserRole(null);
@@ -187,157 +273,184 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for auth state changes
   useEffect(() => {
+    console.log('🚀 Starting auth setup... (useEffect executed)');
     console.log('Setting up auth listener...');
 
-    // Force loading to complete immediately for now to fix loading issue
-    const immediateTimeout = setTimeout(() => {
-      console.log('Force completing auth loading immediately');
-      setLoading(false);
-    }, 100);
+    let unsubscribe;
+    let timeout;
 
-    if (!auth) {
-      console.error('Firebase auth not available, skipping auth setup');
-      setLoading(false);
-      return;
-    }
+    const setupAuth = async () => {
+      console.log('Setting up auth...');
 
-    let listenerCalled = false;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed, user:', user?.email, 'uid:', user?.uid);
-      listenerCalled = true;
-
-      // Clear any cached data when user changes
-      if (user !== currentUser) {
-        console.log('User changed, clearing cached data');
-        // This will help ensure no data mixing between users
+      if (!auth) {
+        console.error('Firebase auth not available, skipping auth setup');
+        setLoading(false);
+        return;
       }
 
-      setCurrentUser(user);
 
-      if (user) {
-        console.log('Processing authenticated user...');
-        try {
-          // Get user role from Firestore
-          let userData = await getUserData(user.uid);
-          console.log('User data from Firestore:', userData);
+      // Persistence is already set at module level, set up the auth listener
+      console.log('Setting up onAuthStateChanged listener...');
+      let listenerCalled = false;
 
-          // If user document doesn't exist, create it (for Google sign-in users)
-          if (!userData) {
-            console.log('User document not found, creating default document for user');
-            const name = user.displayName || user.email.split('@')[0];
-            const uniqueTeamId = generateTeamId();
-            const defaultUserData = {
-              uid: user.uid,
-              name,
-              email: user.email,
-              role: 'member',
-              userType: 'upline',
-              teamId: uniqueTeamId,
-              personalTeamId: uniqueTeamId,
-              createdAt: new Date().toISOString()
-            };
-
-            await setDoc(doc(db, 'users', user.uid), defaultUserData);
-            userData = defaultUserData;
-            console.log('Created default user document:', defaultUserData);
-          } else {
-            console.log('Found existing user document');
-          }
-
-          // Migrate old users if needed
-          if (userData) {
-            let needsUpdate = false;
-            const updates = {};
-
-            // Migrate old users with 'default-team' to unique team IDs
-            if (userData.teamId === 'default-team') {
-              console.log('Migrating user from default-team to unique team ID');
-              const newTeamId = generateTeamId();
-              updates.teamId = newTeamId;
-              updates.personalTeamId = newTeamId; // Set personalTeamId for uplines
-              userData.teamId = newTeamId;
-              userData.personalTeamId = newTeamId;
-              needsUpdate = true;
-            }
-
-            // Ensure all users have personalTeamId field
-            if (!userData.personalTeamId) {
-              console.log('Adding personalTeamId to existing user');
-              if (userData.userType === 'downline') {
-                updates.personalTeamId = generateTeamId(); // Downlines get new personal ID
-              } else {
-                updates.personalTeamId = userData.teamId || generateTeamId(); // Uplines use their teamId
-              }
-              userData.personalTeamId = updates.personalTeamId;
-              needsUpdate = true;
-            }
-
-            // Ensure userType is set
-            if (!userData.userType) {
-              updates.userType = 'upline'; // Default to upline
-              userData.userType = 'upline';
-              needsUpdate = true;
-            }
-
-            if (needsUpdate) {
-              await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
-              console.log('User migrated with updates:', updates);
-            }
-          }
-
-          // Set user state with validated data
-          const finalRole = userData?.role || 'member';
-          const finalUserType = userData?.userType || 'upline';
-          const finalTeamId = userData?.teamId || generateTeamId();
-          const finalPersonalTeamId = userData?.personalTeamId || userData?.teamId || generateTeamId();
-
-          setUserRole(finalRole);
-          setUserType(finalUserType);
-          setTeamId(finalTeamId);
-          setPersonalTeamId(finalPersonalTeamId);
-
-          console.log('✅ User auth setup complete:', {
-            role: finalRole,
-            userType: finalUserType,
-            teamId: finalTeamId,
-            personalTeamId: finalPersonalTeamId
-          });
-        } catch (error) {
-          console.warn('❌ Failed to get user data from Firestore:', error);
-          // Set default values if Firestore fails
-          setUserRole('member');
-          setUserType('upline');
-          const defaultTeamId = generateTeamId();
-          setTeamId(defaultTeamId);
-          setPersonalTeamId(defaultTeamId);
+      console.log('Setting up auth state listener...');
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log('🔄 Auth state changed, user:', user?.email, 'uid:', user?.uid, 'displayName:', user?.displayName);
+        listenerCalled = true;
+ 
+        // Clear any cached data when user changes
+        if (user && currentUser && user.uid !== currentUser.uid) {
+          console.log('User changed, resetting state');
+          // Reset all state for new user
+          setUserRole(null);
+          setUserType(null);
+          setTeamId(null);
+          setPersonalTeamId(null);
         }
-      } else {
-        console.log('No authenticated user');
-        setUserRole(null);
-        setUserType(null);
-        setTeamId(null);
-        setPersonalTeamId(null);
-      }
+ 
+        setCurrentUser(user);
+        console.log('Current user set to:', user ? 'authenticated' : 'null');
 
-      console.log('Setting loading to false');
-      setLoading(false);
-    });
+        if (user) {
+          // Real Firebase user - Firebase handles persistence automatically
+          console.log('Processing authenticated Firebase user...');
 
-    // Force loading to complete after 2 seconds as safety net
-    const timeout = setTimeout(() => {
-      if (!listenerCalled) {
-        console.log('Auth listener never called, force completing loading');
-      } else {
-        console.log('Force completing auth loading after timeout');
-      }
-      setLoading(false);
-    }, 2000);
+          try {
+            // Get user role from Firestore
+            let userData = await getUserData(user.uid);
+            console.log('User data from Firestore:', userData);
+            console.log('Fetching data for user:', user.uid);
 
+            // If user document doesn't exist, create it (for Google sign-in users)
+            if (!userData) {
+              console.log('User document not found, creating default document for user');
+              const name = user.displayName || user.email.split('@')[0];
+              const uniqueTeamId = generateTeamId();
+              const defaultUserData = {
+                uid: user.uid,
+                name,
+                email: user.email,
+                role: 'member',
+                userType: 'upline',
+                teamId: uniqueTeamId,
+                personalTeamId: uniqueTeamId,
+                createdAt: new Date().toISOString()
+              };
+
+              await setDoc(doc(db, 'users', user.uid), defaultUserData);
+              userData = defaultUserData;
+              console.log('Created default user document:', defaultUserData);
+            } else {
+              console.log('Found existing user document');
+            }
+
+            // Migrate old users if needed
+            if (userData) {
+              let needsUpdate = false;
+              const updates = {};
+
+              // Migrate old users with 'default-team' to unique team IDs
+              if (userData.teamId === 'default-team') {
+                console.log('Migrating user from default-team to unique team ID');
+                const newTeamId = generateTeamId();
+                updates.teamId = newTeamId;
+                updates.personalTeamId = newTeamId; // Set personalTeamId for uplines
+                userData.teamId = newTeamId;
+                userData.personalTeamId = newTeamId;
+                needsUpdate = true;
+              }
+
+              // Ensure all users have personalTeamId field
+              if (!userData.personalTeamId) {
+                console.log('Adding personalTeamId to existing user');
+                if (userData.userType === 'downline') {
+                  updates.personalTeamId = generateTeamId(); // Downlines get new personal ID
+                } else {
+                  updates.personalTeamId = userData.teamId || generateTeamId(); // Uplines use their teamId
+                }
+                userData.personalTeamId = updates.personalTeamId;
+                needsUpdate = true;
+              }
+
+              // Ensure userType is set
+              if (!userData.userType) {
+                updates.userType = 'upline'; // Default to upline
+                userData.userType = 'upline';
+                needsUpdate = true;
+              }
+
+              if (needsUpdate) {
+                await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+                console.log('User migrated with updates:', updates);
+              }
+            }
+
+            // Set user state with validated data
+            const finalRole = userData?.role || 'member';
+            const finalUserType = userData?.userType || 'upline';
+            const finalTeamId = userData?.teamId || generateTeamId();
+            const finalPersonalTeamId = userData?.personalTeamId || userData?.teamId || generateTeamId();
+
+            console.log('Setting user state:', {
+              finalRole,
+              finalUserType,
+              finalTeamId,
+              finalPersonalTeamId
+            });
+
+            setUserRole(finalRole);
+            setUserType(finalUserType);
+            setTeamId(finalTeamId);
+            setPersonalTeamId(finalPersonalTeamId);
+
+            console.log('✅ User auth setup complete:', {
+              role: finalRole,
+              userType: finalUserType,
+              teamId: finalTeamId,
+              personalTeamId: finalPersonalTeamId
+            });
+
+            console.log('User authentication flow completed successfully');
+
+          } catch (error) {
+            console.warn('❌ Failed to get user data from Firestore:', error);
+            // Set default values if Firestore fails
+            setUserRole('member');
+            setUserType('upline');
+            const defaultTeamId = generateTeamId();
+            setTeamId(defaultTeamId);
+            setPersonalTeamId(defaultTeamId);
+          }
+        } else {
+          console.log('No authenticated Firebase user');
+          setUserRole(null);
+          setUserType(null);
+          setTeamId(null);
+          setPersonalTeamId(null);
+        }
+
+        console.log('✅ Setting loading to false - auth setup complete');
+        setLoading(false);
+      });
+
+      // Force loading to complete after 2 seconds as safety net
+      timeout = setTimeout(() => {
+        if (!listenerCalled) {
+          console.log('Auth listener never called, force completing loading');
+        } else {
+          console.log('Force completing auth loading after timeout');
+        }
+        setLoading(false);
+      }, 2000);
+    };
+
+    // Call the setup function and handle cleanup
+    setupAuth();
+
+    // Return cleanup function
     return () => {
       if (unsubscribe) unsubscribe();
-      clearTimeout(immediateTimeout);
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     };
   }, []);
 

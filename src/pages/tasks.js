@@ -21,7 +21,7 @@ import {
 import { notificationService } from '../services/notifications';
 
 export default function Tasks() {
-  const { currentUser, teamId, userRole } = useAuth();
+  const { currentUser, teamId, userRole, userType, personalTeamId } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -76,6 +76,7 @@ export default function Tasks() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      console.log('Saving task with teamId:', teamId, 'userType:', userType, 'personalTeamId:', personalTeamId);
       let taskData = {
         ...formData,
         userId: formData.userId || currentUser.uid,
@@ -100,6 +101,7 @@ export default function Tasks() {
       }
       setShowModal(false);
       resetForm();
+      console.log('Task saved successfully');
     } catch (error) {
       console.error('Error saving task:', error);
     }
@@ -246,17 +248,17 @@ export default function Tasks() {
             {(notificationPermission === 'default' || notificationPermission === 'denied') && (
               <button
                 onClick={async () => {
-                  console.log('Enable notifications button clicked');
+                  console.log('🔔 Enable notifications button clicked');
                   try {
                     const permission = await notificationService.requestPermission();
-                    console.log('Permission result:', permission);
+                    console.log('📱 Permission result:', permission);
                     setNotificationPermission(permission);
                     if (permission === 'granted' && currentUser?.uid) {
-                      console.log('Starting task checking for user:', currentUser.uid);
+                      console.log('🚀 Starting task checking for user:', currentUser.uid);
                       notificationService.startTaskChecking(tasks, currentUser.uid);
                     }
                   } catch (error) {
-                    console.error('Error requesting notification permission:', error);
+                    console.error('❌ Error requesting notification permission:', error);
                   }
                 }}
                 className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-phoenix-orange"

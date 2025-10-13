@@ -38,7 +38,8 @@ const statusLabels = {
 };
 
 export default function Prospects() {
-  const { teamId, userRole } = useAuth();
+  const { teamId, userRole, userType, personalTeamId } = useAuth();
+  console.log('Prospects page - teamId:', teamId, 'userType:', userType, 'personalTeamId:', personalTeamId);
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

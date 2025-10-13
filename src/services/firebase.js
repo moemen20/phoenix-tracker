@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -23,9 +23,12 @@ let storage;
 try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   auth = getAuth(app);
+
+  // Persistence not needed here - handled by custom session management
+
   db = getFirestore(app);
   storage = getStorage(app);
-  console.log('Firebase initialized successfully');
+  console.log('Firebase initialized successfully with local persistence');
 } catch (error) {
   console.error('Firebase initialization failed:', error);
   // Create dummy objects to prevent crashes

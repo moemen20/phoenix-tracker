@@ -5,6 +5,11 @@ const withPWA = require('next-pwa')({
 
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export',
+  trailingSlash: true,
+  images: {
+    unoptimized: true
+  }
 }
 
 module.exports = withPWA(nextConfig)

@@ -16,12 +16,12 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
-    
+
     try {
       setError('');
       setIsLoading(true);

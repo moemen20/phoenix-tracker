@@ -68,8 +68,13 @@ const notificationService = {
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
+    console.log(`🔍 Checking ${tasks.length} tasks for notifications (user: ${userId})`);
+    console.log(`📅 Time window: ${now.toLocaleString()} to ${twoHoursFromNow.toLocaleString()}`);
+
     tasks.forEach(task => {
-      if (!task.id || task.status === 'completed') return;
+      if (!task.id || task.completed) return; // Use task.completed instead of task.status
+
+      console.log(`📋 Checking task: ${task.title} (ID: ${task.id})`);
 
       // Handle different date formats (Firestore timestamp or string)
       let dueDate;
@@ -79,10 +84,14 @@ const notificationService = {
         } else if (typeof task.dueDate === 'string') {
           dueDate = new Date(task.dueDate);
         } else {
+          console.log(`⚠️ Invalid date format for task ${task.id}:`, task.dueDate);
           return; // Invalid date format
         }
 
-        if (isNaN(dueDate.getTime())) return; // Invalid date
+        if (isNaN(dueDate.getTime())) {
+          console.log(`⚠️ Invalid date for task ${task.id}:`, task.dueDate);
+          return; // Invalid date
+        }
       } catch (error) {
         console.error('Error parsing task due date:', error);
         return;
@@ -91,8 +100,13 @@ const notificationService = {
       // Check if task is due within 2 hours and not already notified
       const taskKey = `${userId}-${task.id}`;
       const hoursUntilDue = Math.max(0, Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
+      const minutesUntilDue = Math.max(0, Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60)));
+
+      console.log(`⏰ Task ${task.id}: Due ${dueDate.toLocaleString()}, ${hoursUntilDue}h ${minutesUntilDue % 60}m left`);
 
       if (dueDate > now && dueDate <= twoHoursFromNow && !this.lastCheckedTasks.has(taskKey)) {
+        console.log(`🔔 NOTIFYING: Task "${task.title}" due in ${hoursUntilDue} hours`);
+
         this.sendNotification(`Task Reminder: ${task.title}`, {
           body: `Due ${dueDate.toLocaleDateString()} at ${dueDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${hoursUntilDue} hour${hoursUntilDue !== 1 ? 's' : ''})`,
           tag: `task-reminder-${task.id}`
@@ -100,6 +114,13 @@ const notificationService = {
 
         // Mark as notified to prevent duplicates
         this.lastCheckedTasks.add(taskKey);
+        console.log(`✅ Notification sent for task ${task.id}`);
+      } else {
+        console.log(`🚫 Skipping notification for task ${task.id}:`, {
+          isPastDue: dueDate <= now,
+          tooFarAway: dueDate > twoHoursFromNow,
+          alreadyNotified: this.lastCheckedTasks.has(taskKey)
+        });
       }
     });
   },
@@ -108,17 +129,22 @@ const notificationService = {
   startTaskChecking: function(tasks, userId) {
     if (!this.permissionsGranted) return;
 
+    console.log('🚀 Starting notification monitoring for user:', userId);
+
     // Check immediately
     this.checkUpcomingTasks(tasks, userId);
 
-    // Set up interval to check every 30 minutes
+    // Set up interval to check every 5 minutes (for testing - change back to 30 minutes for production)
     if (this.notificationInterval) {
       clearInterval(this.notificationInterval);
     }
 
     this.notificationInterval = setInterval(() => {
+      console.log('🔄 Running scheduled task check...');
       this.checkUpcomingTasks(tasks, userId);
-    }, 30 * 60 * 1000); // 30 minutes
+    }, 5 * 60 * 1000); // 5 minutes for testing
+
+    console.log('✅ Notification monitoring started - checking every 5 minutes');
   },
 
   // Stop task checking

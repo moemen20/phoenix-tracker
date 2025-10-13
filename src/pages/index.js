@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
-  const { currentUser } = useAuth();
+  const { currentUser, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
